@@ -6,13 +6,15 @@ import java.util.Scanner;
 
 /**
  * Iteration process over randomly chosen column templates Z1..Z16,
- * derived columns C1..C16, and checks on C15, C20, and C17.
+ * derived columns C1..C16, C17/C20 checks, and restart rules.
  */
 public class ColumnIteration {
 
     private static final Random RNG = new Random();
 
-    /** X = false, Y = true — addition: Y+Y=Y, Y+X=X, X+X=Y (same → Y, different → X). */
+    /**
+     * Addition: Y+Y=Y, Y+X=X, X+Y=X, X+X=Y (XNOR on booleans: Y=true, X=false).
+     */
     private static boolean add(boolean a, boolean b) {
         return a == b;
     }
@@ -25,12 +27,24 @@ public class ColumnIteration {
         return out;
     }
 
+    /** Left-associative sum of four columns. */
     private static boolean[] addCols(boolean[] a, boolean[] b, boolean[] c, boolean[] d) {
-        return addCols(addCols(a, b), addCols(c, d));
+        return addCols(addCols(addCols(a, b), c), d);
     }
 
     private static boolean equalsCol(boolean[] a, boolean[] b) {
         return Arrays.equals(a, b);
+    }
+
+    /** Number of rows where both columns agree (same symbol). */
+    private static int matchCount(boolean[] a, boolean[] b) {
+        int n = 0;
+        for (int i = 0; i < 4; i++) {
+            if (a[i] == b[i]) {
+                n++;
+            }
+        }
+        return n;
     }
 
     private static String rowString(boolean[] c0, boolean[] c1, boolean[] c2, boolean[] c3) {
@@ -58,6 +72,13 @@ public class ColumnIteration {
         return label + ":\n" + formatCol(c);
     }
 
+    private static void printAllC(boolean[][] c) {
+        System.out.println("C1 .. C16 (each column top to bottom):");
+        for (int i = 0; i < 16; i++) {
+            System.out.println("C" + (i + 1) + ":\n" + formatCol(c[i]));
+        }
+    }
+
     public static void main(String[] args) {
         // Z1 .. Z16 (top to bottom in each column), X=false, Y=true
         boolean[][] z = new boolean[][] {
@@ -81,26 +102,26 @@ public class ColumnIteration {
 
         Scanner in = new Scanner(System.in);
         System.out.print("Enter the number of iterations L: ");
-        int l = in.nextInt();
+        int L = in.nextInt();
         in.nextLine();
-        System.out.println("Number of iterations L = " + l);
+        System.out.println("Number of iterations L = " + L);
 
-        for (int iter = 1; iter <= l; iter++) {
+        for (int iter = 1; iter <= L; iter++) {
             runIteration(iter, z);
         }
         System.out.println("END.");
     }
 
     /**
-     * C1..C4 copied from right to left of the row layout (C4 C3 C2 C1) into C5..C8
-     * so that display order C8 C7 C6 C5 matches C4,C3,C2,C1 respectively (same vectors).
+     * C1..C4 copied horizontally from right to left to form C5..C8: C1→C5, C2→C6, C3→C7, C4→C8.
+     * With display order "C8 C7 C6 C5", columns read C4, C3, C2, C1 (same layout as C4 C3 C2 C1).
      */
     private static void copyC5toC8(boolean[] c1, boolean[] c2, boolean[] c3, boolean[] c4,
             boolean[] c5, boolean[] c6, boolean[] c7, boolean[] c8) {
-        System.arraycopy(c4, 0, c8, 0, 4);
-        System.arraycopy(c3, 0, c7, 0, 4);
-        System.arraycopy(c2, 0, c6, 0, 4);
         System.arraycopy(c1, 0, c5, 0, 4);
+        System.arraycopy(c2, 0, c6, 0, 4);
+        System.arraycopy(c3, 0, c7, 0, 4);
+        System.arraycopy(c4, 0, c8, 0, 4);
     }
 
     private static void runIteration(int iter, boolean[][] z) {
@@ -110,8 +131,7 @@ public class ColumnIteration {
         boolean[] c4 = new boolean[4];
 
         while (true) {
-            // START: pick four distinct templates Z_k for C1..C4
-            pickFourDistinct(z, c1, c2, c3, c4);
+            pickFourRandom(z, c1, c2, c3, c4);
 
             System.out.println("\n--- Iteration " + iter + " ---");
             System.out.println("C4  C3  C2  C1");
@@ -137,9 +157,10 @@ public class ColumnIteration {
             System.out.println("C8 C7 C6 C5");
             System.out.print(rowString(c8, c7, c6, c5));
 
-            // If C15 is Z1, Z7, or Z11, go to START (same iteration)
+            printAllC(c);
+
             if (equalsCol(c15, z[0]) || equalsCol(c15, z[6]) || equalsCol(c15, z[10])) {
-                System.out.println("C15 matches Z1, Z7, or Z11 — restarting START for this iteration.");
+                System.out.println("C15 equals Z1, Z7, or Z11 — go to START.");
                 continue;
             }
 
@@ -154,33 +175,35 @@ public class ColumnIteration {
             boolean c20Special = equalsCol(c20, z1) || equalsCol(c20, z6) || equalsCol(c20, z10) || equalsCol(c20, z15col);
             if (!c20Special) {
                 System.out.println("C20 = Nil");
-                break; // next outer iteration if any
+                break;
             }
-            System.out.println("C20:\n" + formatCol(c20));
+            System.out.println(formatColLabeled("C20", c20));
 
-            List<Integer> matches = new ArrayList<>();
+            List<Integer> strongMatches = new ArrayList<>();
             for (int i = 0; i < 16; i++) {
-                if (equalsCol(c17, c[i])) {
-                    matches.add(i + 1);
+                if (matchCount(c17, c[i]) >= 4) {
+                    strongMatches.add(i + 1);
                 }
             }
-            if (!matches.isEmpty()) {
-                System.out.println("Iteration " + iter + " — C17 matches column(s) among C1..C16:");
-                System.out.println("C17:\n" + formatCol(c17));
-                System.out.println("Equal to: " + matches);
+            if (!strongMatches.isEmpty()) {
+                System.out.println("Iteration " + iter + " — C17 agrees with C" + strongMatches
+                        + " in four or more positions (row-wise).");
+                System.out.println(formatColLabeled("C17", c17));
+                for (int k : strongMatches) {
+                    System.out.println(formatColLabeled("C" + k + " (match)", c[k - 1]));
+                }
             }
 
             break;
         }
     }
 
-    /** Choose four distinct indices into z and copy into c1..c4. */
-    private static void pickFourDistinct(boolean[][] z, boolean[] c1, boolean[] c2, boolean[] c3, boolean[] c4) {
+    /** Randomly choose four distinct templates Z_k for C1..C4. */
+    private static void pickFourRandom(boolean[][] z, boolean[] c1, boolean[] c2, boolean[] c3, boolean[] c4) {
         List<Integer> idx = new ArrayList<>();
         for (int i = 0; i < 16; i++) {
             idx.add(i);
         }
-        // shuffle
         for (int i = idx.size() - 1; i > 0; i--) {
             int j = RNG.nextInt(i + 1);
             int t = idx.get(i);

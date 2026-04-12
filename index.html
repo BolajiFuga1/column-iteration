@@ -75,13 +75,13 @@
 </head>
 <body>
   <h1>Column iteration</h1>
-  <p class="lead">Same rules as the Java program: random C1–C4 from Z1–Z16, derive C5–C16, then C17 / C20 checks.</p>
+  <p class="lead">Runs entirely in your browser (no server required). Open this file in Chrome, Firefox, or Safari (<strong>File → Open</strong>), set <strong>L</strong>, then click <strong>Run</strong>. Same rules as <code>ColumnIteration.java</code>.</p>
 
   <div class="card">
     <div class="row">
       <label>
         Iterations L
-        <input type="number" id="lInput" min="1" max="500" value="3" />
+        <input type="number" id="lInput" min="1" max="2000" value="3" />
       </label>
       <button type="button" id="runBtn">Run</button>
     </div>
@@ -105,12 +105,19 @@
     return [0,1,2,3].map(i => add(a[i], b[i]));
   }
 
+  /** Left-associative: ((a+b)+c)+d — matches Java. */
   function addCols4(a, b, c, d) {
-    return addCols(addCols(a, b), addCols(c, d));
+    return addCols(addCols(addCols(a, b), c), d);
   }
 
   function equalsCol(a, b) {
     return a[0]===b[0] && a[1]===b[1] && a[2]===b[2] && a[3]===b[3];
+  }
+
+  function matchCount(a, b) {
+    let n = 0;
+    for (let i = 0; i < 4; i++) if (a[i] === b[i]) n++;
+    return n;
   }
 
   function rowString(c0, c1, c2, c3) {
@@ -127,7 +134,7 @@
 
   function copy(arr) { return arr.slice(); }
 
-  /** Same as Java: c8←c4, c7←c3, c6←c2, c5←c1 (row-wise copies). */
+  /** C1→C5, C2→C6, C3→C7, C4→C8 (same as Java). */
   function copyC5toC8(c1, c2, c3, c4) {
     return {
       c5: copy(c1),
@@ -135,6 +142,14 @@
       c7: copy(c3),
       c8: copy(c4)
     };
+  }
+
+  function printAllC(cAll, lines) {
+    lines.push('C1 .. C16 (each column top to bottom):');
+    for (let i = 0; i < 16; i++) {
+      lines.push('C' + (i + 1) + ':');
+      lines.push(formatCol(cAll[i]));
+    }
   }
 
   function pickFourDistinct() {
@@ -174,8 +189,10 @@
       lines.push('C8 C7 C6 C5');
       lines.push(rowString(c8, c7, c6, c5).trimEnd());
 
+      printAllC(cAll, lines);
+
       if (equalsCol(c15, Z[0]) || equalsCol(c15, Z[6]) || equalsCol(c15, Z[10])) {
-        lines.push('C15 matches Z1, Z7, or Z11 — restarting START for this iteration.');
+        lines.push('C15 equals Z1, Z7, or Z11 — go to START.');
         continue;
       }
 
@@ -193,15 +210,18 @@
       lines.push('C20:');
       lines.push(formatCol(c20));
 
-      const matches = [];
+      const strong = [];
       for (let i = 0; i < 16; i++) {
-        if (equalsCol(c17, cAll[i])) matches.push(i + 1);
+        if (matchCount(c17, cAll[i]) >= 4) strong.push(i + 1);
       }
-      if (matches.length) {
-        lines.push('Iteration ' + iter + ' — C17 matches column(s) among C1..C16:');
+      if (strong.length) {
+        lines.push('Iteration ' + iter + ' — C17 agrees with C' + JSON.stringify(strong) + ' in four or more positions (row-wise).');
         lines.push('C17:');
         lines.push(formatCol(c17));
-        lines.push('Equal to: ' + JSON.stringify(matches));
+        for (const k of strong) {
+          lines.push('C' + k + ' (match):');
+          lines.push(formatCol(cAll[k - 1]));
+        }
       }
       return lines.join('\n');
     }
@@ -211,8 +231,8 @@
     const raw = document.getElementById('lInput').value;
     const L = parseInt(raw, 10);
     const out = document.getElementById('out');
-    if (!Number.isFinite(L) || L < 1 || L > 500) {
-      out.textContent = 'Enter L between 1 and 500.';
+    if (!Number.isFinite(L) || L < 1 || L > 2000) {
+      out.textContent = 'Enter L between 1 and 2000.';
       out.classList.add('err');
       return;
     }
