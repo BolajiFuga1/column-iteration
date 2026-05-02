@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RentEasy — Landlord Platform</title>
+  <link rel="stylesheet" href="renteasy.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">RE</div>
+      <div>
+        <h1>RentEasy</h1>
+        <p class="tag">All-in-one landlord platform</p>
+      </div>
+    </div>
+    <nav class="nav">
+      <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+      <button class="nav-btn" data-view="properties">Properties</button>
+      <button class="nav-btn" data-view="tenants">Tenants</button>
+      <button class="nav-btn" data-view="payments">Payments</button>
+      <button class="nav-btn" data-view="agreements">Agreements</button>
+      <button class="nav-btn" data-view="maintenance">Maintenance</button>
+      <button class="nav-btn" data-view="demands">Demand Letters</button>
+    </nav>
+  </header>
+
+  <main id="app">
+    <!-- Dashboard -->
+    <section class="view" data-view="dashboard">
+      <div class="view-header">
+        <h2>Dashboard</h2>
+        <p class="muted">Profit and loss overview across all your properties.</p>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-card revenue">
+          <span class="stat-label">Revenue (YTD)</span>
+          <span class="stat-value" id="stat-revenue">$0</span>
+          <span class="stat-sub" id="stat-revenue-sub">From rental payments</span>
+        </div>
+        <div class="stat-card expenses">
+          <span class="stat-label">Expenses (YTD)</span>
+          <span class="stat-value" id="stat-expenses">$0</span>
+          <span class="stat-sub" id="stat-expenses-sub">Maintenance & repairs</span>
+        </div>
+        <div class="stat-card profit">
+          <span class="stat-label">Net Profit</span>
+          <span class="stat-value" id="stat-profit">$0</span>
+          <span class="stat-sub" id="stat-margin">Margin: 0%</span>
+        </div>
+        <div class="stat-card outstanding">
+          <span class="stat-label">Outstanding Rent</span>
+          <span class="stat-value" id="stat-outstanding">$0</span>
+          <span class="stat-sub" id="stat-overdue-count">0 overdue payments</span>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Monthly P&amp;L</h3>
+          <div class="chart-wrap">
+            <canvas id="pnl-chart" width="600" height="260"></canvas>
+          </div>
+          <p class="muted small">Last 6 months. Green bars = revenue, red bars = expenses, blue line = net profit.</p>
+        </div>
+
+        <div class="panel">
+          <h3>Property Performance</h3>
+          <div id="property-performance" class="property-perf"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Upcoming &amp; Overdue Payments</h3>
+        <div id="upcoming-payments" class="payment-list"></div>
+      </div>
+    </section>
+
+    <!-- Properties -->
+    <section class="view hidden" data-view="properties">
+      <div class="view-header">
+        <h2>Properties</h2>
+        <p class="muted">Manage your rental portfolio.</p>
+      </div>
+
+      <div class="panel">
+        <h3>Add Property</h3>
+        <form id="property-form" class="form-grid">
+          <label>Address
+            <input type="text" name="address" required placeholder="123 Main St, Apt 4B" />
+          </label>
+          <label>City
+            <input type="text" name="city" required placeholder="Atlanta" />
+          </label>
+          <label>State
+            <select name="state" required>
+              <option value="">Select</option>
+              <option>AL</option><option>AK</option><option>AZ</option><option>AR</option>
+              <option>CA</option><option>CO</option><option>CT</option><option>DE</option>
+              <option>FL</option><option>GA</option><option>HI</option><option>ID</option>
+              <option>IL</option><option>IN</option><option>IA</option><option>KS</option>
+              <option>KY</option><option>LA</option><option>ME</option><option>MD</option>
+              <option>MA</option><option>MI</option><option>MN</option><option>MS</option>
+              <option>MO</option><option>MT</option><option>NE</option><option>NV</option>
+              <option>NH</option><option>NJ</option><option>NM</option><option>NY</option>
+              <option>NC</option><option>ND</option><option>OH</option><option>OK</option>
+              <option>OR</option><option>PA</option><option>RI</option><option>SC</option>
+              <option>SD</option><option>TN</option><option>TX</option><option>UT</option>
+              <option>VT</option><option>VA</option><option>WA</option><option>WV</option>
+              <option>WI</option><option>WY</option>
+            </select>
+          </label>
+          <label>Zip
+            <input type="text" name="zip" required placeholder="30301" />
+          </label>
+          <label>Type
+            <select name="type" required>
+              <option>Single Family</option>
+              <option>Apartment</option>
+              <option>Condo</option>
+              <option>Townhouse</option>
+              <option>Duplex</option>
+            </select>
+          </label>
+          <label>Bedrooms
+            <input type="number" name="bedrooms" min="0" value="2" />
+          </label>
+          <label>Monthly Rent ($)
+            <input type="number" name="rent" min="0" step="50" required value="1500" />
+          </label>
+          <label>Purchase Price ($)
+            <input type="number" name="purchase" min="0" step="1000" value="0" />
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Add Property</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h3>Your Properties</h3>
+        <div id="property-list" class="property-list"></div>
+      </div>
+    </section>
+
+    <!-- Tenants -->
+    <section class="view hidden" data-view="tenants">
+      <div class="view-header">
+        <h2>Tenants</h2>
+        <p class="muted">Tenants linked to your properties.</p>
+      </div>
+
+      <div class="panel">
+        <h3>Add Tenant</h3>
+        <form id="tenant-form" class="form-grid">
+          <label>Full Name
+            <input type="text" name="name" required placeholder="Jane Doe" />
+          </label>
+          <label>WhatsApp Number (with country code)
+            <input type="tel" name="whatsapp" required placeholder="+1 555 123 4567" />
+          </label>
+          <label>Email
+            <input type="email" name="email" required placeholder="jane@example.com" />
+          </label>
+          <label>Property
+            <select name="propertyId" id="tenant-property-select" required></select>
+          </label>
+          <label>Lease Start
+            <input type="date" name="leaseStart" required />
+          </label>
+          <label>Lease End
+            <input type="date" name="leaseEnd" required />
+          </label>
+          <label>Rent Due Day (1-28)
+            <input type="number" name="dueDay" min="1" max="28" value="1" required />
+          </label>
+          <label>Auto-Debit Account
+            <select name="autoDebit">
+              <option value="off">Off — send reminders only</option>
+              <option value="on">On — auto-debit on due date</option>
+            </select>
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Add Tenant</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h3>Current Tenants</h3>
+        <div id="tenant-list" class="tenant-list"></div>
+      </div>
+    </section>
+
+    <!-- Payments -->
+    <section class="view hidden" data-view="payments">
+      <div class="view-header">
+        <h2>Rental Payments</h2>
+        <p class="muted">Collect rent, send reminders, and record payments.</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Record a Payment</h3>
+          <form id="payment-form" class="form-grid">
+            <label>Tenant
+              <select name="tenantId" id="payment-tenant-select" required></select>
+            </label>
+            <label>Amount ($)
+              <input type="number" name="amount" min="0" step="0.01" required />
+            </label>
+            <label>Date Received
+              <input type="date" name="date" required />
+            </label>
+            <label>Method
+              <select name="method">
+                <option>Bank Transfer</option>
+                <option>Auto-Debit</option>
+                <option>Card</option>
+                <option>Check</option>
+                <option>Cash</option>
+              </select>
+            </label>
+            <label>For Period (Month)
+              <input type="month" name="period" required />
+            </label>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">Record Payment</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <h3>Send Rent Reminder</h3>
+          <p class="muted small">Generate a polite reminder for an upcoming or overdue payment.</p>
+          <form id="reminder-form" class="form-grid">
+            <label>Tenant
+              <select name="tenantId" id="reminder-tenant-select" required></select>
+            </label>
+            <label>Reminder Type
+              <select name="type">
+                <option value="upcoming">Upcoming Due Date (5 days)</option>
+                <option value="due">Due Today</option>
+                <option value="late">Late (1-7 days overdue)</option>
+              </select>
+            </label>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">Generate Reminder</button>
+            </div>
+          </form>
+          <div id="reminder-output" class="preview hidden">
+            <div class="row-between">
+              <h4>Preview</h4>
+              <div class="action-row" id="reminder-actions"></div>
+            </div>
+            <pre id="reminder-text" class="document"></pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Payment History</h3>
+        <div id="payment-history" class="payment-list"></div>
+      </div>
+    </section>
+
+    <!-- Agreements -->
+    <section class="view hidden" data-view="agreements">
+      <div class="view-header">
+        <h2>Tenancy Agreements</h2>
+        <p class="muted">Generate a state-specific lease in minutes — we ask only the easy questions.</p>
+      </div>
+
+      <div class="panel">
+        <h3>New Tenancy Agreement</h3>
+        <form id="agreement-form" class="form-grid">
+          <label>Property
+            <select name="propertyId" id="agreement-property-select" required></select>
+          </label>
+          <label>Tenant Full Name
+            <input type="text" name="tenantName" required placeholder="Jane Doe" />
+          </label>
+          <label>Landlord Full Name
+            <input type="text" name="landlordName" required placeholder="John Smith" />
+          </label>
+          <label>Lease Start
+            <input type="date" name="start" required />
+          </label>
+          <label>Lease End
+            <input type="date" name="end" required />
+          </label>
+          <label>Monthly Rent ($)
+            <input type="number" name="rent" min="0" step="50" required />
+          </label>
+          <label>Security Deposit ($)
+            <input type="number" name="deposit" min="0" step="50" required />
+          </label>
+          <label>Pets Allowed
+            <select name="pets"><option value="No">No</option><option value="Yes">Yes</option></select>
+          </label>
+          <label>Late Fee ($ after 5 days)
+            <input type="number" name="lateFee" min="0" step="5" value="50" />
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Generate Agreement</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="agreement-output" class="panel hidden">
+        <div class="row-between">
+          <h3>Generated Tenancy Agreement</h3>
+          <div class="action-row" id="agreement-actions"></div>
+        </div>
+        <pre id="agreement-text" class="document"></pre>
+      </div>
+
+      <div class="panel">
+        <h3>Saved Agreements</h3>
+        <div id="agreement-list" class="agreement-list"></div>
+      </div>
+    </section>
+
+    <!-- Maintenance -->
+    <section class="view hidden" data-view="maintenance">
+      <div class="view-header">
+        <h2>Maintenance &amp; Costs</h2>
+        <p class="muted">Track maintenance items and costs per property — these flow into your P&amp;L.</p>
+      </div>
+
+      <div class="panel">
+        <h3>Log Maintenance Item</h3>
+        <form id="maintenance-form" class="form-grid">
+          <label>Property
+            <select name="propertyId" id="maintenance-property-select" required></select>
+          </label>
+          <label>Date
+            <input type="date" name="date" required />
+          </label>
+          <label>Category
+            <select name="category">
+              <option>Plumbing</option>
+              <option>Electrical</option>
+              <option>HVAC</option>
+              <option>Appliances</option>
+              <option>Painting</option>
+              <option>Landscaping</option>
+              <option>Pest Control</option>
+              <option>Roof</option>
+              <option>Other</option>
+            </select>
+          </label>
+          <label>Description
+            <input type="text" name="description" required placeholder="Replaced kitchen faucet" />
+          </label>
+          <label>Cost ($)
+            <input type="number" name="cost" min="0" step="0.01" required />
+          </label>
+          <label>Vendor
+            <input type="text" name="vendor" placeholder="ABC Plumbing" />
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Add Maintenance</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="panel">
+        <h3>Maintenance Log</h3>
+        <div id="maintenance-list" class="maintenance-list"></div>
+      </div>
+    </section>
+
+    <!-- Demand Letters -->
+    <section class="view hidden" data-view="demands">
+      <div class="view-header">
+        <h2>Payment Demand Letters</h2>
+        <p class="muted">Generate a formal demand letter for overdue rent.</p>
+      </div>
+
+      <div class="panel">
+        <h3>Create Demand Letter</h3>
+        <form id="demand-form" class="form-grid">
+          <label>Tenant
+            <select name="tenantId" id="demand-tenant-select" required></select>
+          </label>
+          <label>Amount Owed ($)
+            <input type="number" name="amount" min="0" step="0.01" required />
+          </label>
+          <label>Days Overdue
+            <input type="number" name="daysLate" min="1" value="14" required />
+          </label>
+          <label>Pay-or-Quit Window (days)
+            <input type="number" name="window" min="1" value="7" required />
+          </label>
+          <label>Landlord Name
+            <input type="text" name="landlordName" required />
+          </label>
+          <div class="form-actions">
+            <button type="submit" class="btn-primary">Generate Demand Letter</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="demand-output" class="panel hidden">
+        <div class="row-between">
+          <h3>Generated Demand Letter</h3>
+          <div class="action-row" id="demand-actions"></div>
+        </div>
+        <pre id="demand-text" class="document"></pre>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <div id="print-area" aria-hidden="true"></div>
+
+  <script src="renteasy.js"></script>
+</body>
+</html>
