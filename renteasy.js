@@ -159,13 +159,25 @@
     toast._timer = setTimeout(() => t.classList.add('hidden'), 2200);
   }
 
+  const VIEW_TITLES = {
+    dashboard: 'Dashboard',
+    properties: 'Properties',
+    tenants: 'Tenants',
+    payments: 'Rental Payments',
+    agreements: 'Tenancy Agreements',
+    maintenance: 'Maintenance & Costs',
+    demands: 'Payment Demand Letters',
+  };
+
   function setActiveView(name) {
-    document.querySelectorAll('.nav-btn').forEach(b => {
+    document.querySelectorAll('.nav-item').forEach(b => {
       b.classList.toggle('active', b.dataset.view === name);
     });
     document.querySelectorAll('.view').forEach(v => {
       v.classList.toggle('hidden', v.dataset.view !== name);
     });
+    const titleEl = document.getElementById('page-title');
+    if (titleEl) titleEl.textContent = VIEW_TITLES[name] || 'RentEasy';
     if (name === 'dashboard') renderDashboard();
   }
 
@@ -387,14 +399,16 @@
 
     const data = monthlyPnL(6);
     const max = Math.max(100, ...data.map(d => Math.max(d.revenue, d.expenses)));
-    const padL = 50, padR = 20, padT = 20, padB = 35;
+    const padL = 56, padR = 16, padT = 18, padB = 30;
     const plotW = W - padL - padR;
     const plotH = H - padT - padB;
-    const groupW = plotW / data.length;
-    const barW = (groupW - 12) / 2;
+    const stepX = plotW / Math.max(1, data.length - 1);
 
-    // Axes
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    const yFor = (v) => padT + plotH - (v / max) * plotH;
+    const xFor = (i) => padL + stepX * i;
+
+    // Gridlines
+    ctx.strokeStyle = '#e3eae5';
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (let i = 0; i <= 4; i++) {
@@ -405,57 +419,70 @@
     ctx.stroke();
 
     // Y-axis labels
-    ctx.fillStyle = '#8b9cb3';
-    ctx.font = '10px system-ui, sans-serif';
+    ctx.fillStyle = '#97a39c';
+    ctx.font = '11px Inter, system-ui, sans-serif';
     ctx.textAlign = 'right';
     for (let i = 0; i <= 4; i++) {
       const value = max * (1 - i / 4);
       const y = padT + (plotH * i) / 4;
-      ctx.fillText('$' + Math.round(value).toLocaleString(), padL - 6, y + 3);
+      ctx.fillText('$' + Math.round(value).toLocaleString(), padL - 8, y + 4);
     }
 
-    // Bars
-    data.forEach((d, idx) => {
-      const groupX = padL + groupW * idx + 6;
-      const revH = (d.revenue / max) * plotH;
-      const expH = (d.expenses / max) * plotH;
-
-      ctx.fillStyle = '#7bc96f';
-      ctx.fillRect(groupX, padT + plotH - revH, barW, revH);
-
-      ctx.fillStyle = '#f87171';
-      ctx.fillRect(groupX + barW + 2, padT + plotH - expH, barW, expH);
-
-      ctx.fillStyle = '#8b9cb3';
-      ctx.textAlign = 'center';
-      ctx.fillText(d.label, groupX + barW + 1, H - padB + 16);
+    // X-axis labels
+    ctx.textAlign = 'center';
+    data.forEach((d, i) => {
+      ctx.fillText(d.label, xFor(i), H - padB + 18);
     });
 
-    // Profit polyline
-    ctx.strokeStyle = '#5b9fd4';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    data.forEach((d, idx) => {
-      const profit = d.revenue - d.expenses;
-      const groupX = padL + groupW * idx + groupW / 2;
-      const ratio = max ? Math.max(-1, Math.min(1, profit / max)) : 0;
-      const y = padT + plotH / 2 - (ratio * plotH) / 2;
-      if (idx === 0) ctx.moveTo(groupX, y);
-      else ctx.lineTo(groupX, y);
-    });
-    ctx.stroke();
-
-    // Profit dots
-    ctx.fillStyle = '#5b9fd4';
-    data.forEach((d, idx) => {
-      const profit = d.revenue - d.expenses;
-      const groupX = padL + groupW * idx + groupW / 2;
-      const ratio = max ? Math.max(-1, Math.min(1, profit / max)) : 0;
-      const y = padT + plotH / 2 - (ratio * plotH) / 2;
+    // Helper: smooth path through points (Catmull-Rom-ish via quadratic curves)
+    function tracePath(points, close) {
       ctx.beginPath();
-      ctx.arc(groupX, y, 3, 0, Math.PI * 2);
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 0; i < points.length - 1; i++) {
+        const cx = (points[i].x + points[i + 1].x) / 2;
+        const cy = (points[i].y + points[i + 1].y) / 2;
+        ctx.quadraticCurveTo(points[i].x, points[i].y, cx, cy);
+      }
+      const last = points[points.length - 1];
+      ctx.lineTo(last.x, last.y);
+      if (close) {
+        ctx.lineTo(last.x, padT + plotH);
+        ctx.lineTo(points[0].x, padT + plotH);
+        ctx.closePath();
+      }
+    }
+
+    function drawSeries(values, color, fill) {
+      const points = values.map((v, i) => ({ x: xFor(i), y: yFor(v) }));
+      // Filled area
+      const grad = ctx.createLinearGradient(0, padT, 0, padT + plotH);
+      grad.addColorStop(0, fill);
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      tracePath(points, true);
+      ctx.fillStyle = grad;
       ctx.fill();
-    });
+      // Stroke line
+      tracePath(points, false);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+      // Dots
+      ctx.fillStyle = color;
+      points.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = color;
+      });
+    }
+
+    drawSeries(data.map(d => d.revenue), '#6fbf85', 'rgba(111,191,133,0.28)');
+    drawSeries(data.map(d => d.expenses), '#2c5a3a', 'rgba(44,90,58,0.18)');
   }
 
   function renderPropertyPerformance() {
@@ -521,6 +548,50 @@
       </div>`).join('');
   }
 
+  function renderActivityFeed() {
+    const wrap = document.getElementById('activity-feed');
+    if (!wrap) return;
+    const items = [];
+    state.payments.forEach(p => {
+      const t = tenantById(p.tenantId);
+      items.push({
+        when: p.date || p.createdAt,
+        kind: 'payment',
+        what: `Payment of ${moneyExact(p.amount)} from ${t ? t.name : 'tenant'} (${p.method})`,
+      });
+    });
+    state.maintenance.forEach(m => {
+      const p = propertyById(m.propertyId);
+      items.push({
+        when: m.date || m.createdAt,
+        kind: 'maintenance',
+        what: `${m.description} at ${p ? p.address : 'property'} — ${moneyExact(m.cost)}`,
+      });
+    });
+    state.agreements.forEach(a => {
+      items.push({
+        when: a.createdAt,
+        kind: 'agreement',
+        what: `Agreement created for ${a.tenantName}`,
+      });
+    });
+    items.sort((a, b) => (b.when || '').localeCompare(a.when || ''));
+    const top = items.slice(0, 6);
+    if (!top.length) {
+      wrap.innerHTML = '<div class="empty">No activity yet.</div>';
+      return;
+    }
+    const ico = { payment: '$', maintenance: '⚒', agreement: '✎' };
+    wrap.innerHTML = top.map(i => `
+      <div class="activity-item">
+        <div class="icon">${ico[i.kind] || '·'}</div>
+        <div>
+          <div class="when">${fmtDate(i.when)}</div>
+          <div class="what">${i.what}</div>
+        </div>
+      </div>`).join('');
+  }
+
   function renderDashboard() {
     const rev = ytdRevenue();
     const exp = ytdExpenses();
@@ -536,6 +607,7 @@
     drawPnLChart();
     renderPropertyPerformance();
     renderUpcomingPayments();
+    renderActivityFeed();
   }
 
   // ------------------------------------------ Reminders / messages text --
@@ -892,7 +964,7 @@
   });
 
   // -------------------------------------------------------- Navigation --
-  document.querySelectorAll('.nav-btn').forEach(b => {
+  document.querySelectorAll('.nav-item').forEach(b => {
     b.addEventListener('click', () => setActiveView(b.dataset.view));
   });
 
