@@ -2,7 +2,7 @@
   'use strict';
 
   // -------------------------------------------------------------- Storage --
-  const STORAGE_KEY = 'renteasy.v2';
+  const STORAGE_KEY = 'renteasy.v3';
   const emptyState = () => ({
     properties: [],
     tenants: [],
@@ -67,6 +67,37 @@
     const p = propertyById(t.propertyId);
     return `${t.name} — ${p ? p.address : 'no property'}`;
   };
+
+  // ------------------------------------------------------ Paystack mock --
+  // Real product would call Paystack API (DVA + transaction endpoints).
+  // For the demo we simulate the data shapes.
+  const PAYSTACK_BANKS = ['Wema Bank', 'Titan Trust Bank'];
+  function generateDVANumber() {
+    // 10-digit "Wema-style" virtual account number starting with 99
+    let n = '99';
+    for (let i = 0; i < 8; i++) n += Math.floor(Math.random() * 10);
+    return n;
+  }
+  function ensureDVA(tenant) {
+    if (!tenant.dva || !tenant.dva.accountNumber) {
+      tenant.dva = {
+        bank: PAYSTACK_BANKS[Math.floor(Math.random() * PAYSTACK_BANKS.length)],
+        accountNumber: generateDVANumber(),
+        accountName: 'RENTEASY/' + (tenant.name || 'TENANT').toUpperCase().replace(/[^A-Z0-9 \/]/g, '').slice(0, 30),
+      };
+    }
+    return tenant.dva;
+  }
+  function paystackInvoiceLink() {
+    const id = Math.random().toString(36).slice(2, 10);
+    return 'https://paystack.com/pay/' + id;
+  }
+  function buildPaystackInvoiceMessage(tenant, amount, description, link) {
+    const auto = tenant.dva
+      ? `\n\nOr transfer to your dedicated account anytime: ${tenant.dva.bank} · ${tenant.dva.accountNumber} · ${tenant.dva.accountName}.`
+      : '';
+    return `Hi ${tenant.name},\n\n${description} of ${moneyExact(amount)} is ready. Tap to pay securely with your card, bank app or USSD:\n${link}${auto}\n\nThank you,\nRentEasy on behalf of your landlord`;
+  }
 
   // -------------------------------------------------- Channel deep links --
   function whatsappLink(whatsapp, message) {
@@ -203,7 +234,7 @@
       `<option value="${t.id}">${tenantLabel(t)}</option>`
     ).join('');
     const placeholder = '<option value="">Select a tenant</option>';
-    ['payment-tenant-select', 'reminder-tenant-select', 'demand-tenant-select'].forEach(id => {
+    ['payment-tenant-select', 'reminder-tenant-select', 'demand-tenant-select', 'paystack-tenant-select'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
       const current = el.value;
@@ -242,6 +273,7 @@
     }
     list.innerHTML = state.tenants.map(t => {
       const p = propertyById(t.propertyId);
+      ensureDVA(t);
       const auto = t.autoDebit === 'on'
         ? '<span class="badge ok">Auto-debit</span>'
         : '<span class="badge muted">Reminders only</span>';
@@ -251,12 +283,21 @@
             <div><strong>${t.name}</strong> ${auto}</div>
             <div class="meta">${p ? p.address : '(deleted property)'} &middot; Lease ${fmtDate(t.leaseStart)} → ${fmtDate(t.leaseEnd)}</div>
             <div class="meta">WhatsApp ${t.whatsapp || '—'} &middot; ${t.email || '—'} &middot; Due day ${t.dueDay}</div>
+            <div class="dva-box">
+              <span class="dva-label">Paystack DVA</span>
+              <span class="dva-bank">${t.dva.bank}</span>
+              <span class="dva-acct">${t.dva.accountNumber}</span>
+              <span class="dva-name">${t.dva.accountName}</span>
+              <button class="dva-copy" data-action="copy-dva" data-id="${t.id}">Copy</button>
+            </div>
           </div>
           <div class="actions">
+            <button class="btn-channel paystack" data-action="simulate-dva-transfer" data-id="${t.id}">⚡ Simulate Transfer In</button>
             <button class="btn-danger" data-action="delete-tenant" data-id="${t.id}">Delete</button>
           </div>
         </div>`;
     }).join('');
+    saveState();
   }
 
   function renderPaymentHistory() {
@@ -902,7 +943,7 @@
     document.getElementById('tenant-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const f = new FormData(e.target);
-      state.tenants.push({
+      const tenant = {
         id: uid(),
         propertyId: f.get('propertyId'),
         name: f.get('name').trim(),
@@ -913,11 +954,13 @@
         dueDay: Number(f.get('dueDay')) || 1,
         autoDebit: f.get('autoDebit'),
         createdAt: new Date().toISOString()
-      });
+      };
+      ensureDVA(tenant);
+      state.tenants.push(tenant);
       saveState();
       e.target.reset();
       renderAll();
-      toast('Tenant added');
+      toast(`Tenant added · DVA ${tenant.dva.bank} ${tenant.dva.accountNumber}`);
     });
 
     document.getElementById('payment-form').addEventListener('submit', (e) => {
@@ -936,6 +979,43 @@
       e.target.reset();
       renderAll();
       toast('Payment recorded');
+    });
+
+    // Paystack invoice form: auto-fill amount from property rent when tenant picked
+    const paystackTenantSelect = document.getElementById('paystack-tenant-select');
+    paystackTenantSelect.addEventListener('change', (e) => {
+      const tenant = tenantById(e.target.value);
+      if (!tenant) return;
+      const p = propertyById(tenant.propertyId);
+      const amountInput = document.querySelector('#paystack-form input[name="amount"]');
+      if (p && amountInput && !amountInput.value) amountInput.value = Number(p.rent || 0);
+    });
+
+    document.getElementById('paystack-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      const tenant = tenantById(f.get('tenantId'));
+      if (!tenant) { toast('Select a tenant'); return; }
+      ensureDVA(tenant);
+      const amount = Number(f.get('amount')) || 0;
+      const description = (f.get('description') || 'Payment').trim();
+      const link = paystackInvoiceLink();
+      const text = buildPaystackInvoiceMessage(tenant, amount, description, link);
+      // Stash the invoice details on a dataset so the simulate button can use them
+      const out = document.getElementById('paystack-output');
+      out.classList.remove('hidden');
+      out.dataset.tenantId = tenant.id;
+      out.dataset.amount = String(amount);
+      out.dataset.description = description;
+      document.getElementById('paystack-text').textContent = text;
+      buildChannelButtons(document.getElementById('paystack-actions'), {
+        text,
+        whatsappTo: tenant.whatsapp,
+        emailTo: tenant.email,
+        emailSubject: description + ' — Paystack invoice',
+        printTitle: 'Paystack Invoice — ' + tenant.name,
+      });
+      toast('Paystack invoice link generated (demo)');
     });
 
     document.getElementById('reminder-form').addEventListener('submit', (e) => {
@@ -1060,6 +1140,24 @@
     });
   }
 
+  // ------------------------------------------------- Paystack simulation --
+  function simulateIncomingPayment(tenant, amount, method) {
+    const today = new Date().toISOString().slice(0, 10);
+    const period = today.slice(0, 7);
+    state.payments.push({
+      id: uid(),
+      tenantId: tenant.id,
+      amount,
+      date: today,
+      method,
+      period,
+      createdAt: new Date().toISOString()
+    });
+    saveState();
+    toast(`✓ ${moneyExact(amount)} received from ${tenant.name} via ${method}`);
+    renderAll();
+  }
+
   // -------------------------------------------------------- Delete actions --
   document.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
@@ -1091,6 +1189,30 @@
       const rec = state.agreements.find(a => a.id === id);
       if (rec) showAgreement(rec);
       window.scrollTo({ top: document.getElementById('agreement-output').offsetTop - 80, behavior: 'smooth' });
+      return;
+    } else if (action === 'copy-dva') {
+      const tenant = tenantById(id);
+      if (!tenant) return;
+      ensureDVA(tenant);
+      const text = `${tenant.dva.bank} · ${tenant.dva.accountNumber} · ${tenant.dva.accountName}`;
+      navigator.clipboard.writeText(text).then(
+        () => toast('Account details copied'),
+        () => toast('Copy failed — select manually')
+      );
+      return;
+    } else if (action === 'simulate-dva-transfer') {
+      const tenant = tenantById(id);
+      if (!tenant) return;
+      const property = propertyById(tenant.propertyId);
+      const amount = property ? Number(property.rent || 0) : 0;
+      simulateIncomingPayment(tenant, amount, 'Paystack DVA');
+      return;
+    } else if (action === 'simulate-paystack-invoice') {
+      const out = document.getElementById('paystack-output');
+      const tenant = tenantById(out.dataset.tenantId);
+      if (!tenant) { toast('Generate an invoice first'); return; }
+      const amount = Number(out.dataset.amount) || 0;
+      simulateIncomingPayment(tenant, amount, 'Paystack Invoice');
       return;
     } else {
       return;
@@ -1145,7 +1267,7 @@
       rent: 350000, purchase: 95000000,
       createdAt: today.toISOString(),
     });
-    state.tenants.push({
+    const seedTenant = {
       id: tenantId,
       propertyId: propId,
       name: 'Adaobi Okeke',
@@ -1155,7 +1277,9 @@
       leaseEnd: new Date(today.getFullYear() + 1, today.getMonth() - 6, 1).toISOString().slice(0, 10),
       dueDay: 1, autoDebit: 'on',
       createdAt: today.toISOString(),
-    });
+    };
+    ensureDVA(seedTenant);
+    state.tenants.push(seedTenant);
     state.payments.push(
       { id: uid(), tenantId, amount: 350000, date: monthAgo, method: 'Bank Transfer', period: period(1), createdAt: today.toISOString() },
       { id: uid(), tenantId, amount: 350000, date: twoMonthsAgo, method: 'Bank Transfer', period: period(2), createdAt: today.toISOString() },

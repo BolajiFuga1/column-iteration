@@ -330,6 +330,76 @@ button { font-family: inherit; }
 
 .action-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 
+.btn-channel.paystack {
+  color: #0066ff;
+  border-color: rgba(0, 102, 255, 0.3);
+  background: rgba(0, 102, 255, 0.06);
+}
+
+/* ----------------------------------------------------- Paystack / DVA --- */
+.paystack-banner {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  background: linear-gradient(180deg, rgba(0,102,255,0.08), rgba(0,102,255,0.02));
+  border: 1px solid rgba(0, 102, 255, 0.18);
+  border-radius: var(--radius);
+  padding: 0.85rem 1.1rem;
+  margin-bottom: 1rem;
+}
+.paystack-banner .ps-icon {
+  width: 36px; height: 36px; border-radius: 999px;
+  background: #0066ff; color: #fff;
+  display: grid; place-items: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.paystack-banner .ps-title { font-weight: 700; font-size: 0.92rem; color: var(--text-strong); }
+.paystack-banner .ps-sub { font-size: 0.82rem; color: var(--muted); margin-top: 0.15rem; }
+
+.dva-box {
+  background: #f0f6ff;
+  border: 1px dashed rgba(0, 102, 255, 0.35);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.85rem;
+  margin-top: 0.55rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+  font-size: 0.82rem;
+}
+.dva-box .dva-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #0050cc;
+  background: rgba(0,102,255,0.12);
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+}
+.dva-box .dva-bank { color: var(--muted); }
+.dva-box .dva-acct {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+  color: var(--text-strong);
+  letter-spacing: 0.02em;
+}
+.dva-box .dva-name { color: var(--text); }
+.dva-box .dva-copy {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid rgba(0,102,255,0.3);
+  color: #0066ff;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dva-box .dva-copy:hover { background: rgba(0,102,255,0.08); }
+
 /* ----------------------------------------------------- Quick actions --- */
 .quick-actions {
   display: grid;
