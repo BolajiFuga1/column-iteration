@@ -330,6 +330,49 @@ button { font-family: inherit; }
 
 .action-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 
+/* ----------------------------------------------------- Quick actions --- */
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+.quick-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1.1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-strong);
+  cursor: pointer;
+  text-align: left;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.12s ease;
+}
+.quick-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent-dark);
+}
+.qa-icon {
+  width: 32px; height: 32px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  display: grid; place-items: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.quick-btn:hover .qa-icon {
+  background: var(--accent-dark);
+  color: #fff;
+}
+
 /* ----------------------------------------------------------- Stat grid --- */
 .stat-grid {
   display: grid;
@@ -375,6 +418,17 @@ button { font-family: inherit; }
 }
 .stat-trend .up { color: var(--ok); font-weight: 600; }
 .stat-trend .down { color: var(--danger); font-weight: 600; }
+
+.stat-card.danger {
+  background: linear-gradient(180deg, #fff7f6 0%, #ffffff 60%);
+  border-color: rgba(239, 68, 68, 0.22);
+}
+.stat-card.danger .stat-head { color: #b54945; }
+.stat-card .stat-icon.danger-icon {
+  background: rgba(239, 68, 68, 0.14);
+  color: #b91c1c;
+}
+.stat-card .stat-value.danger-value { color: #b91c1c; }
 
 /* -------------------------------------------------------- Charts area --- */
 .chart-wrap {

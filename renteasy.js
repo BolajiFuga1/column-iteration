@@ -2,13 +2,14 @@
   'use strict';
 
   // -------------------------------------------------------------- Storage --
-  const STORAGE_KEY = 'renteasy.v1';
+  const STORAGE_KEY = 'renteasy.v2';
   const emptyState = () => ({
     properties: [],
     tenants: [],
     payments: [],
     maintenance: [],
-    agreements: []
+    agreements: [],
+    taxes: []
   });
 
   function loadState() {
@@ -37,11 +38,11 @@
   // ---------------------------------------------------------- Formatters --
   const money = (n) => {
     const v = Number(n) || 0;
-    return v.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+    return '₦' + v.toLocaleString('en-NG', { maximumFractionDigits: 0 });
   };
   const moneyExact = (n) => {
     const v = Number(n) || 0;
-    return v.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+    return '₦' + v.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
   const fmtDate = (iso) => {
     if (!iso) return '';
@@ -163,9 +164,10 @@
     dashboard: 'Dashboard',
     properties: 'Properties',
     tenants: 'Tenants',
-    payments: 'Rental Payments',
+    payments: 'Rent Collection',
     agreements: 'Tenancy Agreements',
     maintenance: 'Maintenance & Costs',
+    taxes: 'Property Taxes',
     demands: 'Payment Demand Letters',
   };
 
@@ -187,7 +189,7 @@
       `<option value="${p.id}">${propertyLabel(p)}</option>`
     ).join('');
     const placeholder = '<option value="">Select a property</option>';
-    ['tenant-property-select', 'agreement-property-select', 'maintenance-property-select'].forEach(id => {
+    ['tenant-property-select', 'agreement-property-select', 'maintenance-property-select', 'tax-property-select'].forEach(id => {
       const el = document.getElementById(id);
       if (!el) return;
       const current = el.value;
@@ -302,6 +304,41 @@
     }).join('');
   }
 
+  function renderTaxList() {
+    const list = document.getElementById('tax-list');
+    if (!list) return;
+    if (!state.taxes.length) {
+      list.innerHTML = '<div class="empty">No taxes recorded yet.</div>';
+      return;
+    }
+    const sorted = state.taxes.slice().sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
+    const today = new Date();
+    list.innerHTML = sorted.map(x => {
+      const p = propertyById(x.propertyId);
+      const label = (x.customName && x.customName.trim()) || x.name;
+      let badge;
+      if (x.status === 'paid') {
+        badge = '<span class="badge ok">Paid</span>';
+      } else {
+        const due = x.dueDate ? new Date(x.dueDate) : null;
+        if (due && due < today) badge = '<span class="badge danger">Overdue</span>';
+        else badge = '<span class="badge warn">Pending</span>';
+      }
+      return `
+        <div class="list-item">
+          <div>
+            <div><strong>${label}</strong> ${badge}</div>
+            <div class="meta">${p ? p.address + ', ' + p.city + ', ' + p.state : '(deleted property)'} &middot; ${x.frequency || 'Annual'}</div>
+            <div class="meta">Amount: ${moneyExact(x.amount)} &middot; Due ${fmtDate(x.dueDate)}${x.paidDate ? ' &middot; Paid ' + fmtDate(x.paidDate) : ''}</div>
+          </div>
+          <div class="actions">
+            ${x.status !== 'paid' ? `<button class="btn-ghost" data-action="mark-tax-paid" data-id="${x.id}">Mark paid</button>` : ''}
+            <button class="btn-danger" data-action="delete-tax" data-id="${x.id}">Delete</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
   function renderAgreementList() {
     const list = document.getElementById('agreement-list');
     if (!state.agreements.length) {
@@ -334,9 +371,13 @@
   }
   function ytdExpenses() {
     const year = new Date().getFullYear();
-    return state.maintenance
+    const maint = state.maintenance
       .filter(m => m.date && new Date(m.date).getFullYear() === year)
       .reduce((s, m) => s + Number(m.cost || 0), 0);
+    const taxes = state.taxes
+      .filter(x => x.status === 'paid' && x.paidDate && new Date(x.paidDate).getFullYear() === year)
+      .reduce((s, x) => s + Number(x.amount || 0), 0);
+    return maint + taxes;
   }
   function outstandingRentForTenant(t) {
     const now = new Date();
@@ -515,14 +556,9 @@
     }).join('');
   }
 
-  function renderUpcomingPayments() {
-    const wrap = document.getElementById('upcoming-payments');
-    if (!state.tenants.length) {
-      wrap.innerHTML = '<div class="empty">Add a tenant to see upcoming payments.</div>';
-      return;
-    }
+  function rentRowsForDashboard() {
     const now = new Date();
-    const rows = state.tenants.map(t => {
+    return state.tenants.map(t => {
       const p = propertyById(t.propertyId);
       const rent = p ? Number(p.rent || 0) : 0;
       const dueDay = Number(t.dueDay || 1);
@@ -530,22 +566,86 @@
       const nextDue = thisMonthDue >= now ? thisMonthDue : new Date(now.getFullYear(), now.getMonth() + 1, dueDay);
       const daysUntil = Math.ceil((nextDue - now) / (1000 * 60 * 60 * 24));
       const outstanding = outstandingRentForTenant(t);
-      let badge;
-      if (outstanding > 0) badge = '<span class="badge danger">Overdue</span>';
-      else if (daysUntil <= 5) badge = '<span class="badge warn">Due in ' + daysUntil + 'd</span>';
-      else badge = '<span class="badge ok">Up to date</span>';
-      return { t, p, rent, nextDue, daysUntil, outstanding, badge };
-    }).sort((a, b) => (b.outstanding > 0 ? 1 : 0) - (a.outstanding > 0 ? 1 : 0) || a.daysUntil - b.daysUntil);
+      return { t, p, rent, nextDue, daysUntil, outstanding };
+    });
+  }
 
+  function renderOverdueRent() {
+    const wrap = document.getElementById('overdue-rent');
+    if (!wrap) return;
+    if (!state.tenants.length) {
+      wrap.innerHTML = '<div class="empty">No tenants yet.</div>';
+      return;
+    }
+    const rows = rentRowsForDashboard()
+      .filter(r => r.outstanding > 0)
+      .sort((a, b) => b.outstanding - a.outstanding);
+    if (!rows.length) {
+      wrap.innerHTML = '<div class="empty">All tenants are up to date 🎉</div>';
+      return;
+    }
     wrap.innerHTML = rows.map(r => `
       <div class="list-item">
         <div>
-          <div><strong>${r.t.name}</strong> ${r.badge}</div>
-          <div class="meta">${r.p ? r.p.address : '(no property)'} &middot; Next due ${fmtDate(r.nextDue.toISOString())}</div>
-          <div class="meta">Outstanding: ${moneyExact(r.outstanding)} &middot; Monthly rent ${moneyExact(r.rent)}</div>
+          <div><strong>${r.t.name}</strong> <span class="badge danger">Overdue</span></div>
+          <div class="meta">${r.p ? r.p.address + ', ' + r.p.city : '(no property)'}</div>
+          <div class="meta">Owing: <strong style="color:#b91c1c">${moneyExact(r.outstanding)}</strong> &middot; Monthly rent ${moneyExact(r.rent)}</div>
         </div>
         <div class="actions"></div>
       </div>`).join('');
+  }
+
+  function renderUpcomingRent() {
+    const wrap = document.getElementById('upcoming-rent');
+    if (!wrap) return;
+    if (!state.tenants.length) {
+      wrap.innerHTML = '<div class="empty">No tenants yet.</div>';
+      return;
+    }
+    const rows = rentRowsForDashboard()
+      .filter(r => r.outstanding === 0)
+      .sort((a, b) => a.daysUntil - b.daysUntil);
+    if (!rows.length) {
+      wrap.innerHTML = '<div class="empty">No upcoming rent — every tenant currently has a balance.</div>';
+      return;
+    }
+    wrap.innerHTML = rows.map(r => {
+      const badge = r.daysUntil <= 5
+        ? `<span class="badge warn">Due in ${r.daysUntil}d</span>`
+        : `<span class="badge ok">Due in ${r.daysUntil}d</span>`;
+      return `
+      <div class="list-item">
+        <div>
+          <div><strong>${r.t.name}</strong> ${badge}</div>
+          <div class="meta">${r.p ? r.p.address + ', ' + r.p.city : '(no property)'} &middot; Next due ${fmtDate(r.nextDue.toISOString())}</div>
+          <div class="meta">Monthly rent ${moneyExact(r.rent)}</div>
+        </div>
+        <div class="actions"></div>
+      </div>`;
+    }).join('');
+  }
+
+  function renderRecentMaintenance() {
+    const wrap = document.getElementById('recent-maintenance');
+    if (!wrap) return;
+    if (!state.maintenance.length) {
+      wrap.innerHTML = '<div class="empty">No maintenance items logged yet.</div>';
+      return;
+    }
+    const sorted = state.maintenance.slice()
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+      .slice(0, 5);
+    wrap.innerHTML = sorted.map(m => {
+      const p = propertyById(m.propertyId);
+      return `
+        <div class="list-item">
+          <div>
+            <div><strong>${m.description}</strong> <span class="badge muted">${m.category}</span></div>
+            <div class="meta">${p ? p.address : '(deleted property)'} &middot; ${fmtDate(m.date)} &middot; ${moneyExact(m.cost)}</div>
+          </div>
+          <div class="actions"></div>
+        </div>`;
+    }).join('');
   }
 
   function renderActivityFeed() {
@@ -575,13 +675,23 @@
         what: `Agreement created for ${a.tenantName}`,
       });
     });
+    state.taxes.forEach(x => {
+      const p = propertyById(x.propertyId);
+      const label = (x.customName && x.customName.trim()) || x.name;
+      const status = x.status === 'paid' ? 'paid' : 'logged (due ' + fmtDate(x.dueDate) + ')';
+      items.push({
+        when: x.paidDate || x.createdAt,
+        kind: 'tax',
+        what: `${label} ${status} — ${moneyExact(x.amount)}${p ? ' · ' + p.address : ''}`,
+      });
+    });
     items.sort((a, b) => (b.when || '').localeCompare(a.when || ''));
     const top = items.slice(0, 6);
     if (!top.length) {
       wrap.innerHTML = '<div class="empty">No activity yet.</div>';
       return;
     }
-    const ico = { payment: '$', maintenance: '⚒', agreement: '✎' };
+    const ico = { payment: '₦', maintenance: '⚒', agreement: '✎', tax: '%' };
     wrap.innerHTML = top.map(i => `
       <div class="activity-item">
         <div class="icon">${ico[i.kind] || '·'}</div>
@@ -606,7 +716,9 @@
     document.getElementById('stat-overdue-count').textContent = `${overdueCount()} tenant${overdueCount() === 1 ? '' : 's'} with balance`;
     drawPnLChart();
     renderPropertyPerformance();
-    renderUpcomingPayments();
+    renderOverdueRent();
+    renderUpcomingRent();
+    renderRecentMaintenance();
     renderActivityFeed();
   }
 
@@ -677,20 +789,15 @@
 
   // ------------------------------------------------ Tenancy agreement --
   const STATE_CLAUSES = {
-    CA: 'California Security Deposit Cap. Pursuant to California Civil Code §1950.5, the security deposit shall not exceed two (2) months\' rent for unfurnished units or three (3) months\' rent for furnished units. The Landlord shall return the deposit, less lawful deductions, within 21 days of the Tenant vacating the premises.',
-    NY: 'New York Disclosures. Pursuant to New York Real Property Law §238-a, the security deposit shall not exceed one (1) month\'s rent. If the unit is rent-stabilized, the Tenant\'s rights under the Rent Stabilization Code apply and supersede any conflicting term herein.',
-    FL: 'Florida Radon Gas Disclosure. As required by Florida Statute §404.056(5): "Radon is a naturally occurring radioactive gas that, when it has accumulated in a building in sufficient quantities, may present health risks to persons who are exposed to it over time. Levels of radon that exceed federal and state guidelines have been found in buildings in Florida. Additional information regarding radon and radon testing may be obtained from your county health department."',
-    TX: 'Texas Late Fee. Pursuant to Texas Property Code §92.019, late fees are reasonable as long as they do not exceed 12% of the monthly rent for properties with four or fewer units, or 10% for larger properties, and are not assessed until rent is at least two (2) days past due.',
-    GA: 'Georgia Security Deposit. Pursuant to O.C.G.A. §44-7-30 et seq., the security deposit shall be held in a separate escrow account and an itemized list of the condition of the premises shall be furnished to the Tenant prior to move-in.',
-    IL: 'Illinois Disclosures. Pursuant to the Illinois Radon Awareness Act (420 ILCS 46/), the Landlord discloses that radon is a naturally-occurring radioactive gas that may cause lung cancer and a known result of radon testing on the premises (if any) is provided to the Tenant.',
-    WA: 'Washington State Notices. Pursuant to RCW 59.18, a 14-day notice to pay or vacate is required prior to eviction for non-payment, and the security deposit shall be held in a trust account at a financial institution located in Washington.',
-    CO: 'Colorado Bed Bug Disclosure. Pursuant to C.R.S. §38-12-1004, the Landlord discloses that the premises has not, within the previous eight (8) months, contained a known bed bug infestation, unless otherwise noted in writing as an addendum to this Agreement.',
-    MA: 'Massachusetts Security Deposit. Pursuant to M.G.L. c. 186, §15B, the security deposit shall be held in a separate, interest-bearing account in a Massachusetts bank, and a receipt of deposit shall be furnished to the Tenant within 30 days.',
-    OR: 'Oregon Smoking Policy Disclosure. Pursuant to ORS 90.220(7), the Landlord discloses the smoking policy of the premises in writing as part of this Agreement.',
+    'Lagos': 'Lagos State Tenancy Law 2011. This Agreement is governed by the Lagos State Tenancy Law (2011). The Landlord shall not demand more than one (1) year\'s rent in advance from a sitting tenant, nor more than six (6) months from a new tenant on a monthly tenancy. Statutory notice periods apply: one (1) week for weekly tenancy, one (1) month for monthly tenancy, three (3) months for quarterly or half-yearly tenancy, and six (6) months for yearly tenancy. Land Use Charge is the responsibility of the Landlord unless otherwise agreed in writing.',
+    'FCT (Abuja)': 'FCT (Abuja) Provisions. This Agreement is governed by the Recovery of Premises Act (FCT) and FCT Land Administration regulations. Statutory notice periods apply prior to recovery of premises, and Ground Rent is payable to the Federal Capital Development Authority (FCDA) by the Landlord unless otherwise agreed.',
+    'Rivers': 'Rivers State Provisions. This Agreement is governed by the Rivers State Recovery of Premises Law. Tenement Rate is payable by the Landlord to the relevant Local Government Council unless expressly transferred to the Tenant in writing.',
+    'Kano': 'Kano State Provisions. This Agreement is governed by the Kano State Recovery of Premises Law. Tenement Rate is payable by the Landlord to the relevant Local Government Council unless expressly transferred to the Tenant in writing.',
+    'Oyo': 'Oyo State Provisions. This Agreement is governed by the Oyo State Recovery of Premises Law. Tenement Rate is payable by the Landlord to the relevant Local Government Council unless expressly transferred to the Tenant in writing.',
   };
-  function stateSpecificClause(stateCode) {
-    return STATE_CLAUSES[stateCode] ||
-      `State-Specific Provisions. This Agreement shall be governed by and construed in accordance with the laws of the State of ${stateCode}. Both parties acknowledge they are responsible for compliance with all applicable state and local landlord-tenant statutes.`;
+  function stateSpecificClause(stateName) {
+    return STATE_CLAUSES[stateName] ||
+      `State-Specific Provisions. This Agreement is governed by the laws of ${stateName} State and the federal laws of the Federal Republic of Nigeria. Statutory notice periods under the Recovery of Premises Law of ${stateName} State apply prior to recovery of possession, and applicable property taxes (Tenement Rate, Land Use Charge or equivalent) are payable by the Landlord unless expressly transferred to the Tenant in writing.`;
   }
 
   function buildAgreementText(opts) {
@@ -892,6 +999,27 @@
       toast('Agreement generated');
     });
 
+    document.getElementById('tax-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      state.taxes.push({
+        id: uid(),
+        propertyId: f.get('propertyId'),
+        name: f.get('name'),
+        customName: (f.get('customName') || '').trim(),
+        amount: Number(f.get('amount')) || 0,
+        dueDate: f.get('dueDate'),
+        frequency: f.get('frequency'),
+        status: f.get('status') || 'pending',
+        paidDate: f.get('paidDate') || '',
+        createdAt: new Date().toISOString()
+      });
+      saveState();
+      e.target.reset();
+      renderAll();
+      toast('Tax record added');
+    });
+
     document.getElementById('demand-form').addEventListener('submit', (e) => {
       e.preventDefault();
       const f = new FormData(e.target);
@@ -951,6 +1079,14 @@
       state.maintenance = state.maintenance.filter(m => m.id !== id);
     } else if (action === 'delete-agreement') {
       state.agreements = state.agreements.filter(a => a.id !== id);
+    } else if (action === 'delete-tax') {
+      state.taxes = state.taxes.filter(x => x.id !== id);
+    } else if (action === 'mark-tax-paid') {
+      const tax = state.taxes.find(x => x.id === id);
+      if (tax) {
+        tax.status = 'paid';
+        tax.paidDate = new Date().toISOString().slice(0, 10);
+      }
     } else if (action === 'view-agreement') {
       const rec = state.agreements.find(a => a.id === id);
       if (rec) showAgreement(rec);
@@ -968,6 +1104,13 @@
     b.addEventListener('click', () => setActiveView(b.dataset.view));
   });
 
+  // ---------------------------------------------------- Quick actions --
+  document.addEventListener('click', (e) => {
+    const qb = e.target.closest('[data-quick-view]');
+    if (!qb) return;
+    setActiveView(qb.dataset.quickView);
+  });
+
   // -------------------------------------------------------- Render all --
   function renderAll() {
     renderPropertyDropdowns();
@@ -977,6 +1120,7 @@
     renderPaymentHistory();
     renderMaintenanceList();
     renderAgreementList();
+    renderTaxList();
     renderDashboard();
   }
 
@@ -986,40 +1130,51 @@
     const propId = uid();
     const tenantId = uid();
     const today = new Date();
-    const isoToday = today.toISOString().slice(0, 10);
     const monthAgo = new Date(today.getFullYear(), today.getMonth() - 1, 5).toISOString().slice(0, 10);
     const twoMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 2, 5).toISOString().slice(0, 10);
+    const yearEnd = new Date(today.getFullYear(), 11, 31).toISOString().slice(0, 10);
     const period = (offset) => {
       const d = new Date(today.getFullYear(), today.getMonth() - offset, 1);
       return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
     };
     state.properties.push({
       id: propId,
-      address: '742 Evergreen Terrace',
-      city: 'Atlanta', state: 'GA', zip: '30301',
-      type: 'Single Family', bedrooms: 3,
-      rent: 1800, purchase: 240000,
+      address: '14 Admiralty Way',
+      city: 'Lekki Phase 1', state: 'Lagos', zip: 'Lekki',
+      type: 'Apartment', bedrooms: 3,
+      rent: 350000, purchase: 95000000,
       createdAt: today.toISOString(),
     });
     state.tenants.push({
       id: tenantId,
       propertyId: propId,
-      name: 'Alex Rivera',
-      whatsapp: '+1 555 010 2030',
-      email: 'alex.rivera@example.com',
+      name: 'Adaobi Okeke',
+      whatsapp: '+234 802 123 4567',
+      email: 'adaobi.okeke@example.com',
       leaseStart: new Date(today.getFullYear(), today.getMonth() - 6, 1).toISOString().slice(0, 10),
       leaseEnd: new Date(today.getFullYear() + 1, today.getMonth() - 6, 1).toISOString().slice(0, 10),
       dueDay: 1, autoDebit: 'on',
       createdAt: today.toISOString(),
     });
     state.payments.push(
-      { id: uid(), tenantId, amount: 1800, date: monthAgo, method: 'Auto-Debit', period: period(1), createdAt: today.toISOString() },
-      { id: uid(), tenantId, amount: 1800, date: twoMonthsAgo, method: 'Auto-Debit', period: period(2), createdAt: today.toISOString() },
+      { id: uid(), tenantId, amount: 350000, date: monthAgo, method: 'Bank Transfer', period: period(1), createdAt: today.toISOString() },
+      { id: uid(), tenantId, amount: 350000, date: twoMonthsAgo, method: 'Bank Transfer', period: period(2), createdAt: today.toISOString() },
     );
     state.maintenance.push({
       id: uid(), propertyId: propId,
       date: monthAgo, category: 'Plumbing',
-      description: 'Replaced kitchen faucet', cost: 185, vendor: 'ABC Plumbing',
+      description: 'Replaced kitchen tap', cost: 25000, vendor: 'Lekki Plumbing Services',
+      createdAt: today.toISOString(),
+    });
+    state.taxes.push({
+      id: uid(), propertyId: propId,
+      name: 'Land Use Charge (Lagos)',
+      customName: '',
+      amount: 75000,
+      dueDate: yearEnd,
+      frequency: 'Annual',
+      status: 'pending',
+      paidDate: '',
       createdAt: today.toISOString(),
     });
     saveState();

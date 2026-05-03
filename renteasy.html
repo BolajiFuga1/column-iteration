@@ -30,13 +30,16 @@
           <span class="icon">◔</span><span>Tenants</span>
         </button>
         <button class="nav-item" data-view="payments">
-          <span class="icon">↻</span><span>Payments</span>
+          <span class="icon">↻</span><span>Rent Collection</span>
         </button>
         <button class="nav-item" data-view="agreements">
           <span class="icon">✎</span><span>Agreements</span>
         </button>
         <button class="nav-item" data-view="maintenance">
           <span class="icon">⚒</span><span>Maintenance</span>
+        </button>
+        <button class="nav-item" data-view="taxes">
+          <span class="icon">₦</span><span>Taxes</span>
         </button>
         <button class="nav-item" data-view="demands">
           <span class="icon">!</span><span>Demand Letters</span>
@@ -66,25 +69,41 @@
 
       <!-- ========================= Dashboard view ========================= -->
       <section class="view" data-view="dashboard">
+
+        <div class="quick-actions">
+          <button class="quick-btn" data-quick-view="properties">
+            <span class="qa-icon">＋</span><span>Add Property</span>
+          </button>
+          <button class="quick-btn" data-quick-view="tenants">
+            <span class="qa-icon">＋</span><span>Add Tenant</span>
+          </button>
+          <button class="quick-btn" data-quick-view="payments">
+            <span class="qa-icon">✉</span><span>Send Reminder</span>
+          </button>
+          <button class="quick-btn" data-quick-view="taxes">
+            <span class="qa-icon">＋</span><span>Add Taxes</span>
+          </button>
+        </div>
+
         <div class="stat-grid">
           <div class="stat-card">
-            <div class="stat-head"><span>Revenue (YTD)</span><span class="stat-icon">$</span></div>
-            <div class="stat-value" id="stat-revenue">$0</div>
+            <div class="stat-head"><span>Revenue (YTD)</span><span class="stat-icon">₦</span></div>
+            <div class="stat-value" id="stat-revenue">₦0</div>
             <div class="stat-trend" id="stat-revenue-sub"><span class="up">↑</span> From rental payments</div>
           </div>
           <div class="stat-card">
             <div class="stat-head"><span>Expenses (YTD)</span><span class="stat-icon">⚒</span></div>
-            <div class="stat-value" id="stat-expenses">$0</div>
-            <div class="stat-trend" id="stat-expenses-sub"><span class="down">↓</span> Maintenance &amp; repairs</div>
+            <div class="stat-value" id="stat-expenses">₦0</div>
+            <div class="stat-trend" id="stat-expenses-sub"><span class="down">↓</span> Maintenance, taxes &amp; repairs</div>
           </div>
           <div class="stat-card">
             <div class="stat-head"><span>Net Profit</span><span class="stat-icon">◎</span></div>
-            <div class="stat-value" id="stat-profit">$0</div>
+            <div class="stat-value" id="stat-profit">₦0</div>
             <div class="stat-trend"><span id="stat-margin">Margin: 0%</span></div>
           </div>
-          <div class="stat-card">
-            <div class="stat-head"><span>Outstanding Rent</span><span class="stat-icon">!</span></div>
-            <div class="stat-value" id="stat-outstanding">$0</div>
+          <div class="stat-card danger">
+            <div class="stat-head"><span>Outstanding Rent</span><span class="stat-icon danger-icon">!</span></div>
+            <div class="stat-value danger-value" id="stat-outstanding">₦0</div>
             <div class="stat-trend"><span id="stat-overdue-count">0 tenants with balance</span></div>
           </div>
         </div>
@@ -112,12 +131,25 @@
 
         <div class="grid-2">
           <div class="panel">
+            <h3>Overdue Rent</h3>
+            <p class="muted small">Tenants with a balance owing on past-due months.</p>
+            <div id="overdue-rent" class="payment-list"></div>
+          </div>
+          <div class="panel">
+            <h3>Upcoming Rent</h3>
+            <p class="muted small">Future rent payments not yet due, sorted by next due date.</p>
+            <div id="upcoming-rent" class="payment-list"></div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="panel">
             <h3>Property Performance</h3>
             <div id="property-performance" class="property-perf"></div>
           </div>
           <div class="panel">
-            <h3>Upcoming &amp; Overdue Payments</h3>
-            <div id="upcoming-payments" class="payment-list"></div>
+            <h3>Recent Maintenance</h3>
+            <div id="recent-maintenance" class="maintenance-list"></div>
           </div>
         </div>
       </section>
@@ -135,24 +167,24 @@
             </label>
             <label>State
               <select name="state" required>
-                <option value="">Select</option>
-                <option>AL</option><option>AK</option><option>AZ</option><option>AR</option>
-                <option>CA</option><option>CO</option><option>CT</option><option>DE</option>
-                <option>FL</option><option>GA</option><option>HI</option><option>ID</option>
-                <option>IL</option><option>IN</option><option>IA</option><option>KS</option>
-                <option>KY</option><option>LA</option><option>ME</option><option>MD</option>
-                <option>MA</option><option>MI</option><option>MN</option><option>MS</option>
-                <option>MO</option><option>MT</option><option>NE</option><option>NV</option>
-                <option>NH</option><option>NJ</option><option>NM</option><option>NY</option>
-                <option>NC</option><option>ND</option><option>OH</option><option>OK</option>
-                <option>OR</option><option>PA</option><option>RI</option><option>SC</option>
-                <option>SD</option><option>TN</option><option>TX</option><option>UT</option>
-                <option>VT</option><option>VA</option><option>WA</option><option>WV</option>
-                <option>WI</option><option>WY</option>
+                <option value="">Select state</option>
+                <option>Abia</option><option>Adamawa</option><option>Akwa Ibom</option>
+                <option>Anambra</option><option>Bauchi</option><option>Bayelsa</option>
+                <option>Benue</option><option>Borno</option><option>Cross River</option>
+                <option>Delta</option><option>Ebonyi</option><option>Edo</option>
+                <option>Ekiti</option><option>Enugu</option><option>FCT (Abuja)</option>
+                <option>Gombe</option><option>Imo</option><option>Jigawa</option>
+                <option>Kaduna</option><option>Kano</option><option>Katsina</option>
+                <option>Kebbi</option><option>Kogi</option><option>Kwara</option>
+                <option>Lagos</option><option>Nasarawa</option><option>Niger</option>
+                <option>Ogun</option><option>Ondo</option><option>Osun</option>
+                <option>Oyo</option><option>Plateau</option><option>Rivers</option>
+                <option>Sokoto</option><option>Taraba</option><option>Yobe</option>
+                <option>Zamfara</option>
               </select>
             </label>
-            <label>Zip
-              <input type="text" name="zip" required placeholder="30301" />
+            <label>LGA / Area
+              <input type="text" name="zip" placeholder="e.g. Lekki, Ikeja" />
             </label>
             <label>Type
               <select name="type" required>
@@ -290,7 +322,7 @@
         </div>
 
         <div class="panel">
-          <h3>Payment History</h3>
+          <h3>Rent Collection History</h3>
           <div id="payment-history" class="payment-list"></div>
         </div>
       </section>
@@ -389,6 +421,64 @@
         <div class="panel">
           <h3>Maintenance Log</h3>
           <div id="maintenance-list" class="maintenance-list"></div>
+        </div>
+      </section>
+
+      <!-- ========================= Taxes ========================= -->
+      <section class="view hidden" data-view="taxes">
+        <div class="panel">
+          <h3>Add Tax</h3>
+          <p class="muted small">Track property tax obligations: Land Use Charge (Lagos), Tenement Rate, Capital Gains Tax, Withholding Tax on rent, etc.</p>
+          <form id="tax-form" class="form-grid">
+            <label>Property
+              <select name="propertyId" id="tax-property-select" required></select>
+            </label>
+            <label>Tax Type
+              <select name="name" required>
+                <option>Land Use Charge (Lagos)</option>
+                <option>Tenement Rate</option>
+                <option>Property Tax</option>
+                <option>Capital Gains Tax</option>
+                <option>Withholding Tax on Rent</option>
+                <option>Personal Income Tax</option>
+                <option>Ground Rent</option>
+                <option>Other</option>
+              </select>
+            </label>
+            <label>Custom Name (optional)
+              <input type="text" name="customName" placeholder="Override the tax type name" />
+            </label>
+            <label>Amount (₦)
+              <input type="number" name="amount" min="0" step="100" required />
+            </label>
+            <label>Due Date
+              <input type="date" name="dueDate" required />
+            </label>
+            <label>Frequency
+              <select name="frequency">
+                <option>Annual</option>
+                <option>One-time</option>
+                <option>Quarterly</option>
+              </select>
+            </label>
+            <label>Status
+              <select name="status">
+                <option value="pending">Pending</option>
+                <option value="paid">Paid</option>
+              </select>
+            </label>
+            <label>Date Paid (if paid)
+              <input type="date" name="paidDate" />
+            </label>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">Add Tax</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="panel">
+          <h3>Tax Obligations</h3>
+          <div id="tax-list" class="maintenance-list"></div>
         </div>
       </section>
 
